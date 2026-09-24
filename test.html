@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SCF Supabase Connection Test</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f4f7fb;
+    color: #1a2b3c;
+    margin: 0;
+    padding: 16px;
+    line-height: 1.5;
+  }
+  h1 {
+    font-size: 20px;
+    color: #0d4a7c;
+    border-bottom: 2px solid #0d4a7c;
+    padding-bottom: 8px;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 15px;
+    color: #0d4a7c;
+    margin: 20px 0 8px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .test {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid #eef2f6;
+    font-size: 14px;
+  }
+  .test:last-child { border-bottom: none; }
+  .icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #fff;
+    margin-top: 1px;
+  }
+  .pass { background: #22a06b; }
+  .fail { background: #d63333; }
+  .warn { background: #e0a800; }
+  .info { background: #4a90d9; }
+  .pending { background: #9aa5b1; }
+  .label { flex: 1; }
+  .detail {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 3px;
+    word-break: break-word;
+    font-family: ui-monospace, Menlo, monospace;
+  }
+  .fix {
+    font-size: 12px;
+    color: #b45309;
+    background: #fff7ed;
+    padding: 6px 8px;
+    border-radius: 6px;
+    margin-top: 6px;
+    border-left: 3px solid #f59e0b;
+  }
+  button {
+    background: #0d4a7c;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    width: 100%;
+    margin-top: 8px;
+    cursor: pointer;
+  }
+  button:active { background: #093357; }
+  button.secondary { background: #4a90d9; }
+  button:disabled { background: #9aa5b1; cursor: not-allowed; }
+  .summary {
+    text-align: center;
+    font-weight: 700;
+    font-size: 16px;
+    padding: 14px;
+    border-radius: 10px;
+    margin-top: 16px;
+  }
+  .summary.ok { background: #d1fae5; color: #065f46; }
+  .summary.bad { background: #fee2e2; color: #991b1b; }
+  input {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    margin-top: 6px;
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+
+<h1>🔧 SCF Supabase Connection Test</h1>
+
+<div class="card">
+  <h2>Configuration</h2>
+  <input type="text" id="supabaseUrl" placeholder="Supabase Project URL" />
+  <input type="text" id="supabaseKey" placeholder="Supabase Anon Key" />
+  <button onclick="runTests()">▶ Run All Tests</button>
+</div>
+
+<div class="card" id="results">
+  <h2>Results</h2>
+  <div class="test">
+    <div class="icon pending">…</div>
+    <div class="label">Waiting to run tests</div>
+  </div>
+</div>
+
+<div id="summary"></div>
+
+<!-- Supabase CDN — must load before test script -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+// =====================================================================
+// CONFIG — pre-fill from your existing app.js values
+// =====================================================================
+const DEFAULT_URL = "https://shsvitucpxmutxyyuqfg.supabase.co";
+const DEFAULT_KEY = "sb_publishable_j2Xqe9mTX9RMO76wy1m3lg_pPlceFnA";
+
+document.getElementById("supabaseUrl").value = DEFAULT_URL;
+document.getElementById("supabaseKey").value = DEFAULT_KEY;
+
+// =====================================================================
+// TEST RUNNER
+// =====================================================================
+async function runTests() {
+  const url = document.getElementById("supabaseUrl").value.trim();
+  const key = document.getElementById("supabaseKey").value.trim();
+
+  const results = [];
+  const resultsEl = document.getElementById("results");
+  const summaryEl = document.getElementById("summary");
+
+  resultsEl.innerHTML = "<h2>Results</h2>";
+  summaryEl.innerHTML = "";
+
+  function log(status, label, detail, fix) {
+    results.push({ status, label, detail, fix });
+    const iconChar = status === "pass" ? "✓" :
+                     status === "fail" ? "✕" :
+                     status === "warn" ? "!" : "i";
+    const div = document.createElement("div");
+    div.className = "test";
+    div.innerHTML = `
+      <div class="icon ${status}">${iconChar}</div>
+      <div class="label">
+        <div>${label}</div>
+        ${detail ? `<div class="detail">${escapeHtml(String(detail))}</div>` : ""}
+        ${fix ? `<div class="fix">💡 ${escapeHtml(fix)}</div>` : ""}
+      </div>
+    `;
+    resultsEl.appendChild(div);
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+  // -----------------------------------------------------------------
+  // TEST 1 — Supabase CDN loaded
+  // -----------------------------------------------------------------
+  if (typeof window.supabase === "undefined") {
+    log("fail", "Supabase library loaded",
+        "window.supabase is undefined",
+        "Add <script src=\"https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2\"></script> BEFORE app.js in index.html");
+    renderSummary(false);
+    return;
+  }
+  log("pass", "Supabase library loaded",
+      `Version: ${window.supabase.version || "2.x"}`);
+
+  // -----------------------------------------------------------------
+  // TEST 2 — Config values present
+  // -----------------------------------------------------------------
+  if (!url || !key) {
+    log("fail", "Config values provided",
+        "URL or key is empty",
+        "Paste your Supabase Project URL and anon key above.");
+    renderSummary(false);
+    return;
+  }
+  log("pass", "Config values provided",
+      `URL: ${url.substring(0, 40)}…`);
+
+  // -----------------------------------------------------------------
+  // TEST 3 — URL format valid
+  // -----------------------------------------------------------------
+  const urlOk = /^https:\/\/[a-z0-9]+\.supabase\.co$/i.test(url);
+  if (!urlOk) {
+    log("warn", "URL format looks unusual",
+        url,
+        "Should look like https://abcdefgh.supabase.co");
+  } else {
+    log("pass", "URL format valid", url);
+  }
+
+  // -----------------------------------------------------------------
+  // TEST 4 — Key format looks like a Supabase key
+  // -----------------------------------------------------------------
+  const keyOk = key.startsWith("eyJ") || key.startsWith("sb_publishable_") || key.startsWith("sb_secret_");
+  if (!keyOk) {
+    log("warn", "Key format looks unusual",
+        `Starts with: ${key.substring(0, 20)}…`,
+        "Supabase keys usually start with 'eyJ' or 'sb_publishable_'");
+  } else {
+    log("pass", "Key format valid", `Starts with ${key.substring(0, 15)}…`);
+  }
+
+  // -----------------------------------------------------------------
+  // TEST 5 — Client initialization
+  // -----------------------------------------------------------------
+  let client;
+  try {
+    client = window.supabase.createClient(url, key);
+    log("pass", "Client initialized", "createClient() succeeded");
+  } catch (e) {
+    log("fail", "Client initialization",
+        e.message,
+        "Check the URL and key formats.");
+    renderSummary(false);
+    return;
+  }
+
+  // -----------------------------------------------------------------
+  // TEST 6 — REST API reachable
+  // -----------------------------------------------------------------
+  try {
+    const res = await fetch(`${url}/rest/v1/`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` }
+    });
+    if (res.ok || res.status === 404 || res.status === 400) {
+      log("pass", "REST API reachable",
+          `HTTP ${res.status}`);
+    } else if (res.status === 401 || res.status === 403) {
+      log("fail", "REST API auth failed",
+          `HTTP ${res.status} — key rejected`,
+          "Re-copy the anon key from Supabase → Project Settings → API");
+    } else {
+      log("warn", "REST API unusual response",
+          `HTTP ${res.status}`);
+    }
+  } catch (e) {
+    log("fail", "REST API unreachable",
+        e.message,
+        "Check your internet connection and the project URL.");
+  }
+
+  // -----------------------------------------------------------------
+  // TEST 7 — invite_codes table exists & is readable
+  // -----------------------------------------------------------------
+  try {
+    const { data, error, count } = await client
+      .from("invite_codes")
+      .select("*", { count: "exact", head: false })
+      .limit(3);
+
+    if (error) {
+      if (error.code === "42P01") {
+        log("fail", "invite_codes table missing",
+            "Table does not exist",
+            "Run the invite_codes SQL in Supabase SQL Editor.");
+      } else if (error.code === "42501" || error.message.includes("permission")) {
+        log("fail", "invite_codes RLS blocked",
+            error.message,
+            "Add an RLS policy: create policy \"Anyone can read active invite codes\" on invite_codes for select using (is_active = true);");
+      } else {
+        log("fail", "invite_codes query failed",
+            `${error.code || ""} ${error.message}`,
+            "Check the table exists and RLS allows reading.");
+      }
+    } else {
+      log("pass", "invite_codes readable",
+          `Found ${count ?? data.length} row(s). Sample: ${JSON.stringify(data[0] || {})}`);
+    }
+  } catch (e) {
+    log("fail", "invite_codes error",
+        e.message);
+  }
+
+  // -----------------------------------------------------------------
+  // TEST 8 — profiles table exists & is readable
+  // -----------------------------------------------------------------
+  try {
+    const { data, error } = await client
+      .from("profiles")
+      .select("id, display_name, is_verified")
+      .limit(3);
+
+    if (error) {
+      if (error.code === "42P01") {
+        log("fail", "profiles table missing",
+            "Table does not exist",
+            "Run the main schema SQL in Supabase SQL Editor.");
+      } else if (error.code === "42501" || error.message.includes("permission")) {
+        log("warn", "profiles RLS blocks anon read",
+            error.message,
+            "This is normal — profiles are only readable by verified users. Log in first.");
+      } else {
+        log("fail", "profiles query failed",
+            `${error.code || ""} ${error.message}`);
+      }
+    } else {
+      log("pass", "profiles readable",
+          `Found ${data.length} row(s)`);
+    }
+  } catch (e) {
+    log("fail", "profiles error", e.message);
+  }
+
+  // -----------------------------------------------------------------
+  // TEST 9 — posts table exists
+  // -----------------------------------------------------------------
+  try {
+    const { data, error } = await client
+      .from("posts")
+      .select("id")
+      .limit(1);
+
+    if (error) {
+      if (error.code === "42P01") {
+        log("fail", "posts table missing",
+            "Table does not exist",
+            "Run the main schema SQL.");
+      } else if (error.code === "42501") {
+        log("warn", "posts RLS blocks anon read",
+            "Normal — only verified users can read posts.");
+      } else {
+        log("fail", "posts query failed",
+            `${error.code || ""} ${error.message}`);
+      }
+    } else {
+      log("pass", "posts readable",
+          `Found ${data.length} row(s)`);
+    }
+  } catch (e) {
+    log("fail", "posts error", e.message);
+  }
+
+  // -----------------------------------------------------------------
+  // TEST 10 — Auth service reachable
+  // -----------------------------------------------------------------
+  try {
+    const { data, error } = await client.auth.getSession();
+    if (error) {
+      log("fail", "Auth service error",
+          error.message);
+    } else {
+      log("pass", "Auth service reachable",
+          data.session ? "Active session found" : "No session (not logged in)");
+    }
+  } catch (e) {
+    log("fail", "Auth service error", e.message);
+  }
+
+  // -----------------------------------------------------------------
+  // TEST 11 — validate_invite_code RPC exists
+  // -----------------------------------------------------------------
+  try {
+    const { data, error } = await client.rpc("validate_invite_code", {
+      p_code: "TEST-CODE-INVALID"
+    });
+
+    if (error) {
+      if (error.code === "42883" || error.message.includes("function")) {
+        log("fail", "validate_invite_code function missing",
+            error.message,
+            "Run the invite_codes SQL to create the function.");
+      } else {
+        log("warn", "validate_invite_code returned error",
+            `${error.code || ""} ${error.message}`,
+            "Function exists but may need different args or permissions.");
+      }
+    } else {
+      log("pass", "validate_invite_code works",
+          `Returned: ${data} (expected false for invalid code)`);
+    }
+  } catch (e) {
+    log("fail", "validate_invite_code error", e.message);
+  }
+
+  // -----------------------------------------------------------------
+  // SUMMARY
+  // -----------------------------------------------------------------
+  const failures = results.filter(r => r.status === "fail").length;
+  const warnings = results.filter(r => r.status === "warn").length;
+  const passes = results.filter(r => r.status === "pass").length;
+
+  renderSummary(failures === 0, { passes, warnings, failures });
+}
+
+function renderSummary(allGood, stats = {}) {
+  const summaryEl = document.getElementById("summary");
+  if (allGood) {
+    summaryEl.innerHTML = `
+      <div class="summary ok">
+        ✅ All critical tests passed!<br>
+        <span style="font-size:13px;font-weight:400">
+          ${stats.passes || 0} passed · ${stats.warnings || 0} warnings
+        </span>
+      </div>`;
+  } else {
+    summaryEl.innerHTML = `
+      <div class="summary bad">
+        ❌ ${stats.failures} critical failure(s)<br>
+        <span style="font-size:13px;font-weight:400">
+          ${stats.passes || 0} passed · ${stats.warnings || 0} warnings · ${stats.failures} failed
+        </span>
+      </div>`;
+  }
+}
+
+// Auto-run on page load after 500ms
+window.addEventListener("load", () => {
+  setTimeout(runTests, 500);
+});
+</script>
+
+</body>
+</html>
