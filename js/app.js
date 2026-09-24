@@ -1,6 +1,6 @@
 // ==================== CONFIG ====================
-const SUPABASE_URL = "https://shsvitucpxmutxyyuqfg.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_j2Xqe9mTX9RMO76wy1m3lg_pPlceFnA";
+const SUPABASE_URL = "https://kzpmyhcorwtirmfqcdnw.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_CYnDTCR3DXq8QN9WR9qhdQ_803gesM7";
 let supabase;
 let currentUser = null;
 let currentProfile = null;
