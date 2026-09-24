@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+  window.addEventListener("error", e => {
+    document.title = "ERR: " + e.message;
+    alert("JS Error: " + e.message);
+  });
+  window.addEventListener("unhandledrejection", e => {
+    alert("Promise Error: " + (e.reason?.message || e.reason));
+  });
+</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>St. Camillus Families • Alumni Network</title>
